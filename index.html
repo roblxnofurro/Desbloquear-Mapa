@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desbloqueando mapa. 🗣️</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { margin: 0; padding: 0; background-color: #0d110f; color: #d8d8d8; display: flex; height: 100vh; }
+        .contenedor { display: flex; width: 100%; height: 100%; }
+        #mapa { flex: 7; height: 100%; background-color: #111; }
+        .panel { flex: 3; background: linear-gradient(145deg, #161a15 0%, #11140f 100%); padding: 40px 30px; border-left: 1px solid rgba(196, 167, 119, 0.3); box-shadow: -10px 0 30px rgba(0,0,0,0.8); overflow-y: auto; z-index: 1000; }
+        .panel h1 { font-family: 'Cinzel', serif; font-weight: 700; font-size: 1.6rem; color: #c4a777; margin-bottom: 5px; letter-spacing: 1px; }
+        .panel p { color: #8c9b86; font-size: 0.9rem; margin-bottom: 35px; font-weight: 300; }
+        form { display: flex; flex-direction: column; gap: 20px; }
+        .grupo-input { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 0.85rem; color: #a4b39d; font-weight: 500; letter-spacing: 0.5px; }
+        input, textarea, select { width: 100%; padding: 12px; border: 1px solid #2e3629; border-radius: 8px; background-color: #0a0d0a; color: #e0e0e0; font-size: 0.95rem; transition: all 0.4s ease; }
+        
+        input[type="file"] { padding: 8px; color: #8c9b86; font-size: 0.85rem; cursor: pointer; }
+        input[type="file"]::file-selector-button { background-color: #233b22; color: #c4a777; border: 1px solid rgba(196, 167, 119, 0.4); padding: 8px 12px; border-radius: 4px; margin-right: 15px; cursor: pointer; transition: background 0.3s; }
+        input[type="file"]::file-selector-button:hover { background-color: #2c4a2a; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #c4a777; box-shadow: 0 0 10px rgba(196, 167, 119, 0.15); }
+        
+        button { background-color: #233b22; color: #c4a777; font-family: 'Cinzel', serif; letter-spacing: 1px; padding: 14px; border: 1px solid rgba(196, 167, 119, 0.4); border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 1rem; transition: all 0.3s ease; margin-top: 10px; }
+        button:hover:not(:disabled) { background-color: #2c4a2a; border-color: #c4a777; box-shadow: 0 4px 15px rgba(35, 59, 34, 0.5); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .marcador-elemental { display: flex; justify-content: center; align-items: center; font-size: 20px; background: #161a15; border: 1px solid rgba(196, 167, 119, 0.5); border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.6); transition: transform 0.4s ease, border-color 0.4s ease; }
+        .marcador-elemental:hover { transform: scale(1.15); border-color: #c4a777; }
+        
+        /* Animaciones fluidas para las ventanas del mapa */
+        .leaflet-popup { transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out !important; }
+        
+        /* Ajuste premium: Scroll interno si hay más de 2 fotos para cuidar las proporciones visuales */
+        .leaflet-popup-content-wrapper { 
+            background-color: #161a15 !important; 
+            color: #d8d8d8 !important; 
+            border: 1px solid rgba(196, 167, 119, 0.3); 
+            border-radius: 12px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8); 
+            padding: 12px 8px; 
+            min-width: 270px;
+            max-height: 420px; 
+            overflow-y: auto; 
+        }
+        .leaflet-popup-tip { background-color: #161a15 !important; }
+        .leaflet-popup-content h3 { margin: 0 0 5px 0; font-family: 'Cinzel', serif; font-weight: 500; color: #c4a777; font-size: 1.1rem; border-bottom: 1px solid rgba(196, 167, 119, 0.2); padding-bottom: 5px; }
+        .fecha-popup { font-size: 0.8rem; color: #8c9b86; margin: 0 0 10px 0; font-style: italic; display: block; }
+        .leaflet-popup-content p.desc { margin: 0 0 10px 0; color: #a4b39d; font-size: 0.9rem; line-height: 1.6; }
+        
+        /* Las fotos se apilarán de forma ordenada hacia abajo */
+        .foto-popup { width: 100%; max-height: 190px; object-fit: cover; border-radius: 8px; margin-top: 8px; border: 1px solid rgba(196, 167, 119, 0.3); box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: block; }
+        @media (max-width: 768px) { .contenedor { flex-direction: column; } #mapa { flex: 1; min-height: 50vh; } .panel { flex: 1; border-left: none; border-top: 1px solid rgba(196, 167, 119, 0.3); } }
+    </style>
+</head>
+<body>
+
+    <div class="contenedor">
+        <div id="mapa"></div>
+
+        <div class="panel">
+            <h1>Bitácora</h1>
+            <p>Selecciona un punto en el mapa para registrar una memoria.</p>
+
+            <form id="formulario-spot">
+                <div class="grupo-input">
+                    <label>Coordenadas</label>
+                    <input type="text" id="coordenadas" readonly placeholder="Esperando ubicación..." required>
+                </div>
+                <div class="grupo-input">
+                    <label for="titulo">Nombre del lugar</label>
+                    <input type="text" id="titulo" placeholder="Ej: El Templo del Aire del Norte" required>
+                </div>
+                <div class="grupo-input">
+                    <label for="fechaVisita">Fecha de la visita</label>
+                    <input type="date" id="fechaVisita" required>
+                </div>
+                <div class="grupo-input">
+                    <label for="elemento">Elemento (Categoría)</label>
+                    <select id="elemento" required>
+                        <option value="fuego">🔥 Nación del Fuego (Restaurantes, Calor)</option>
+                        <option value="agua">💧 Tribu Agua (Lagos, Relax, Clima frío)</option>
+                        <option value="tierra">🌱 Reino Tierra (Naturaleza, Parques, Caminatas)</option>
+                        <option value="aire">🌪️ Nómadas Aire (Miradores, Viajes, Alturas)</option>
+                    </select>
+                </div>
+                <div class="grupo-input">
+                    <label for="descripcion">Memoria</label>
+                    <textarea id="descripcion" rows="3" placeholder="¿Qué hace especial este lugar?" required></textarea>
+                </div>
+                <div class="grupo-input">
+                    <label for="foto">Sube tus fotos (Puedes elegir varias)</label>
+                    <input type="file" id="foto" accept="image/*" multiple>
+                </div>
+
+                <button type="submit" id="btn-guardar">Guardar Memoria</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyB8qp3r5DX9oVaOjYgdIx0UL8TXGt7CJGs",
+          authDomain: "desbloquear-mapa.firebaseapp.com",
+          projectId: "desbloquear-mapa",
+          storageBucket: "desbloquear-mapa.firebasestorage.app",
+          messagingSenderId: "516122407028",
+          appId: "1:516122407028:web:d1a1d813b569eec2166121"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwkpNbKPR1hVGIOcsCZ8bb6wmsRHHpd8Cb6xcE6w1TyM8KiLF42PpsvMLHXqwaNq_wwUg/exec";
+        
+        let latSeleccionada = null;
+        let lngSeleccionada = null;
+        let marcadorTemporal = null;
+
+        const miMapa = L.map('mapa').setView([4.58, -74.16], 12); 
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '&copy; CARTO'
+        }).addTo(miMapa);
+
+        const grupoMarcadores = L.layerGroup().addTo(miMapa);
+
+        const obtenerEmoji = (elemento) => {
+            switch(elemento) {
+                case 'fuego': return '🔥';
+                case 'agua': return '💧';
+                case 'tierra': return '🌱';
+                case 'aire': return '🌪️';
+                default: return '📍';
+            }
+        };
+
+        miMapa.on('click', function(e) {
+            latSeleccionada = e.latlng.lat;
+            lngSeleccionada = e.latlng.lng;
+            document.getElementById('coordenadas').value = `${latSeleccionada.toFixed(5)}, ${lngSeleccionada.toFixed(5)}`;
+            if (marcadorTemporal) miMapa.removeLayer(marcadorTemporal);
+            
+            const iconoTemp = L.divIcon({ html: `<div style="font-size: 24px; text-shadow: 0 0 10px #c4a777;">✨</div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
+            marcadorTemporal = L.marker([latSeleccionada, lngSeleccionada], {icon: iconoTemp}).addTo(miMapa);
+        });
+
+        const procesarImagen = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]); 
+                reader.onerror = error => reject(error);
+            });
+        };
+
+        document.getElementById('formulario-spot').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!latSeleccionada || !lngSeleccionada) {
+                alert("Por favor, selecciona un punto en el mapa primero.");
+                return;
+            }
+
+            const btnGuardar = document.getElementById('btn-guardar');
+            const archivosFotos = document.getElementById('foto').files; // Captura la lista de archivos
+            
+            btnGuardar.disabled = true;
+
+            try {
+                let fotosUrls = []; // Array para almacenar los links de Drive
+
+                // Bucle para subir las fotos una por una a Drive
+                if (archivosFotos.length > 0) {
+                    for (let i = 0; i < archivosFotos.length; i++) {
+                        const archivo = archivosFotos[i];
+                        btnGuardar.textContent = `Subiendo foto ${i + 1} de ${archivosFotos.length}... ⏳`;
+                        
+                        const base64Data = await procesarImagen(archivo);
+                        
+                        const formData = new URLSearchParams();
+                        formData.append('fileData', base64Data);
+                        formData.append('mimeType', archivo.type);
+                        formData.append('fileName', archivo.name);
+
+                        const respuestaScript = await fetch(GOOGLE_SCRIPT_URL, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const dataDrive = await respuestaScript.json();
+                        
+                        if(dataDrive.success) {
+                            fotosUrls.push(dataDrive.url); 
+                        } else {
+                            throw new Error(dataDrive.error);
+                        }
+                    }
+                }
+
+                btnGuardar.textContent = "Guardando en la bitácora... ✨";
+
+                // Guardar todo el bloque en Firestore
+                await addDoc(collection(db, "spots"), {
+                    titulo: document.getElementById('titulo').value,
+                    fechaVisita: document.getElementById('fechaVisita').value,
+                    elemento: document.getElementById('elemento').value,
+                    descripcion: document.getElementById('descripcion').value,
+                    fotosUrls: fotosUrls, // Guardamos la lista completa de fotos
+                    lat: latSeleccionada,
+                    lng: lngSeleccionada,
+                    fechaRegistro: new Date().toISOString()
+                });
+
+                document.getElementById('formulario-spot').reset();
+                if (marcadorTemporal) miMapa.removeLayer(marcadorTemporal);
+                latSeleccionada = null;
+                lngSeleccionada = null;
+                alert("¡Recuerdo guardado con éxito!");
+
+            } catch (error) {
+                console.error("Error al guardar: ", error);
+                alert("Hubo un error subiendo tus fotos a Drive.");
+            } finally {
+                btnGuardar.textContent = "Guardar Memoria";
+                btnGuardar.disabled = false;
+            }
+        });
+
+        onSnapshot(collection(db, "spots"), (snapshot) => {
+            grupoMarcadores.clearLayers();
+            snapshot.forEach((doc) => {
+                const datos = doc.data();
+                const iconoPersonalizado = L.divIcon({
+                    html: `<div>${obtenerEmoji(datos.elemento)}</div>`,
+                    className: 'marcador-elemental', iconSize: [36, 36], iconAnchor: [18, 18]
+                });
+
+                let fechaFormateada = "";
+                if (datos.fechaVisita) {
+                    const [anio, mes, dia] = datos.fechaVisita.split("-");
+                    fechaFormateada = `<span class="fecha-popup">📅 ${dia}-${mes}-${anio}</span>`;
+                }
+
+                // Generar las etiquetas HTML para todas las fotos guardadas
+                let htmlFotos = "";
+                
+                // Si el punto tiene la nueva estructura de múltiples fotos (array)
+                if (datos.fotosUrls && Array.isArray(datos.fotosUrls)) {
+                    datos.fotosUrls.forEach(url => {
+                        let urlSegura = url;
+                        if (urlSegura.includes("uc?export=view&id=")) {
+                            urlSegura = urlSegura.replace("uc?export=view&id=", "thumbnail?id=") + "&sz=w1000";
+                        }
+                        htmlFotos += `<img src="${urlSegura}" class="foto-popup" alt="Recuerdo">`;
+                    });
+                } 
+                // Soporte de compatibilidad: por si abren un punto viejo que solo guardó una foto (string)
+                else if (datos.fotoUrl) {
+                    let urlSegura = datos.fotoUrl;
+                    if (urlSegura.includes("uc?export=view&id=")) {
+                        urlSegura = urlSegura.replace("uc?export=view&id=", "thumbnail?id=") + "&sz=w1000";
+                    }
+                    htmlFotos = `<img src="${urlSegura}" class="foto-popup" alt="Recuerdo">`;
+                }
+
+                const contenidoPopup = `
+                    <h3>${obtenerEmoji(datos.elemento)} ${datos.titulo}</h3>
+                    ${fechaFormateada}
+                    <p class="desc">${datos.descripcion}</p>
+                    ${htmlFotos}
+                `;
+
+                L.marker([datos.lat, datos.lng], { icon: iconoPersonalizado })
+                    .bindPopup(contenidoPopup)
+                    .addTo(grupoMarcadores);
+            });
+        });
+    </script>
+</body>
+</html>
