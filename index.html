@@ -96,13 +96,31 @@
         .btn-secundario { background-color: transparent; border: 1px solid rgba(140, 155, 134, 0.3); color: #8c9b86; margin-top: 0; }
         .btn-secundario:hover { background-color: rgba(140, 155, 134, 0.1); border-color: #a4b39d; box-shadow: none; }
 
-        @media (max-width: 768px) { .contenedor { flex-direction: column; } #mapa { flex: 1; min-height: 50vh; } .panel { flex: 1; border-left: none; border-top: 1px solid rgba(196, 167, 119, 0.3); } }
+        /* BUSCADOR DE LUGARES SOBRE EL MAPA */
+        #buscador-mapa { position: absolute; top: 15px; left: 60px; right: 15px; max-width: 420px; z-index: 1000; }
+        #buscador-input { width: 100%; padding: 12px 45px 12px 16px; border: 1px solid rgba(196, 167, 119, 0.4); border-radius: 10px; background-color: rgba(13, 17, 15, 0.92); color: #e0e0e0; font-size: 0.95rem; box-shadow: 0 6px 20px rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        #buscador-input:focus { outline: none; border-color: #c4a777; box-shadow: 0 0 12px rgba(196, 167, 119, 0.3); }
+        #buscador-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #c4a777; font-size: 1rem; padding: 6px; margin: 0; cursor: pointer; }
+        #buscador-resultados { margin-top: 8px; background-color: rgba(13, 17, 15, 0.96); border: 1px solid rgba(196, 167, 119, 0.3); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.7); max-height: 260px; overflow-y: auto; display: none; }
+        #buscador-resultados.activo { display: block; }
+        .resultado-item { padding: 10px 14px; font-size: 0.85rem; color: #d8d8d8; cursor: pointer; border-bottom: 1px solid rgba(196, 167, 119, 0.1); transition: background 0.2s; }
+        .resultado-item:last-child { border-bottom: none; }
+        .resultado-item:hover { background-color: rgba(35, 59, 34, 0.5); }
+        .resultado-vacio { padding: 10px 14px; font-size: 0.85rem; color: #8c9b86; font-style: italic; }
+
+        @media (max-width: 768px) { .contenedor { flex-direction: column; } #mapa { flex: 1; min-height: 50vh; } .panel { flex: 1; border-left: none; border-top: 1px solid rgba(196, 167, 119, 0.3); } #buscador-mapa { left: 15px; max-width: none; } }
     </style>
 </head>
 <body>
 
     <div class="contenedor">
-        <div id="mapa"></div>
+        <div id="mapa">
+            <div id="buscador-mapa">
+                <input type="text" id="buscador-input" placeholder="Buscar un lugar o dirección..." autocomplete="off">
+                <button type="button" id="buscador-btn" aria-label="Buscar">🔍</button>
+                <div id="buscador-resultados"></div>
+            </div>
+        </div>
 
         <div class="panel">
             <h1>Bitácora</h1>
@@ -210,20 +228,32 @@
             document.getElementById('mensaje-error').textContent = "";
         };
 
+        // Cada código tiene su propia secuencia de 4 colores y su propio enlace de destino.
+        // El segundo código usa los complementarios (teoría del color) del primero:
+        // verde->rojo, morado->amarillo, dorado->azul, negro->blanco
+        window.codigosSecretos = [
+            {
+                secuencia: ['verde', 'morado', 'dorado', 'negro'],
+                enlace: "https://roblxnofurro.github.io/-.-..---.---.---.-.-.--.-.-.-----.-.-..----/"
+            },
+            {
+                secuencia: ['rojo', 'amarillo', 'azul', 'blanco'],
+                enlace: "https://TU-ENLACE-AQUI.com" // <-- reemplaza esto con el enlace que quieras para el código complementario
+            }
+        ];
+
         window.verificarCodigo = function() {
             if (window.secuenciaIngresada.length !== 4) {
                 document.getElementById('mensaje-error').textContent = "Debes ingresar 4 colores.";
                 return;
             }
-            
-            const codigoCorrecto = ['verde', 'morado', 'dorado', 'negro'];
-            let esCorrecto = true;
-            for(let i = 0; i < 4; i++) {
-                if(window.secuenciaIngresada[i] !== codigoCorrecto[i]) esCorrecto = false;
-            }
-            
-            if (esCorrecto) {
-                window.location.href = "https://roblxnofurro.github.io/-.-..---.---.---.-.-.--.-.-.-----.-.-..----/";
+
+            const codigoCoincidente = window.codigosSecretos.find(({ secuencia }) =>
+                secuencia.every((color, i) => color === window.secuenciaIngresada[i])
+            );
+
+            if (codigoCoincidente) {
+                window.location.href = codigoCoincidente.enlace;
             } else {
                 document.getElementById('mensaje-error').textContent = "El código no coincide. La memoria sigue bloqueada 🔒";
                 window.secuenciaIngresada = [];
@@ -261,7 +291,7 @@
 
         const miMapa = L.map('mapa').setView([4.58, -74.16], 12); 
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_3r20_1_ea3679eeec1db6853c320142', {
             maxZoom: 19,
             attribution: '&copy; CARTO'
         }).addTo(miMapa);
@@ -283,6 +313,82 @@
         
         marcadorSecreto.on('click', () => {
             document.getElementById('modal-acertijo').classList.add('modal-activo');
+        });
+
+        // BUSCADOR DE LUGARES (Nominatim / OpenStreetMap, sin necesidad de API key)
+        const inputBuscador = document.getElementById('buscador-input');
+        const btnBuscador = document.getElementById('buscador-btn');
+        const cajaResultados = document.getElementById('buscador-resultados');
+        let marcadorBusqueda = null;
+        let temporizadorBusqueda = null;
+
+        const buscarLugar = async (texto) => {
+            if (!texto || texto.trim().length < 2) {
+                cajaResultados.classList.remove('activo');
+                cajaResultados.innerHTML = '';
+                return;
+            }
+            try {
+                // countrycodes=co limita a Colombia. viewbox+bounded=0 SOLO prioriza resultados
+                // cerca de Bogotá sin descartar el resto, así búsquedas cortas/vagas igual funcionan.
+                const viewbox = '-74.35,4.85,-73.95,4.45'; // suroeste,noreste alrededor de Bogotá
+                const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&dedupe=1&countrycodes=co&viewbox=${viewbox}&bounded=0&q=${encodeURIComponent(texto)}`;
+                const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+                const resultados = await resp.json();
+
+                cajaResultados.innerHTML = '';
+                if (!resultados.length) {
+                    cajaResultados.innerHTML = '<div class="resultado-vacio">Sin resultados</div>';
+                } else {
+                    resultados.forEach(lugar => {
+                        const item = document.createElement('div');
+                        item.className = 'resultado-item';
+                        const partes = lugar.display_name.split(',').map(p => p.trim());
+                        const nombreCorto = partes.slice(0, 3).join(', ');
+                        item.textContent = nombreCorto;
+                        item.title = lugar.display_name;
+                        item.addEventListener('click', () => {
+                            const lat = parseFloat(lugar.lat);
+                            const lng = parseFloat(lugar.lon);
+                            miMapa.setView([lat, lng], 16);
+
+                            if (marcadorBusqueda) miMapa.removeLayer(marcadorBusqueda);
+                            const iconoBusqueda = L.divIcon({ html: `<div style="font-size: 26px; text-shadow: 0 0 10px #c4a777;">📍</div>`, className: '', iconSize: [26, 26], iconAnchor: [13, 26] });
+                            marcadorBusqueda = L.marker([lat, lng], { icon: iconoBusqueda }).addTo(miMapa);
+
+                            inputBuscador.value = lugar.display_name;
+                            cajaResultados.classList.remove('activo');
+                        });
+                        cajaResultados.appendChild(item);
+                    });
+                }
+                cajaResultados.classList.add('activo');
+            } catch (error) {
+                console.error('Error buscando el lugar:', error);
+                cajaResultados.innerHTML = '<div class="resultado-vacio">Error al buscar. Intenta de nuevo.</div>';
+                cajaResultados.classList.add('activo');
+            }
+        };
+
+        inputBuscador.addEventListener('input', () => {
+            clearTimeout(temporizadorBusqueda);
+            temporizadorBusqueda = setTimeout(() => buscarLugar(inputBuscador.value), 300);
+        });
+
+        inputBuscador.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                clearTimeout(temporizadorBusqueda);
+                buscarLugar(inputBuscador.value);
+            }
+        });
+
+        btnBuscador.addEventListener('click', () => buscarLugar(inputBuscador.value));
+
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('buscador-mapa').contains(e.target)) {
+                cajaResultados.classList.remove('activo');
+            }
         });
 
         const obtenerEmoji = (elemento) => {
