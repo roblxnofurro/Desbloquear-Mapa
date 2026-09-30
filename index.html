@@ -108,6 +108,20 @@
         .resultado-item:hover { background-color: rgba(35, 59, 34, 0.5); }
         .resultado-vacio { padding: 10px 14px; font-size: 0.85rem; color: #8c9b86; font-style: italic; }
 
+        /* EDITAR / BORRAR MARCADORES */
+        .acciones-popup { display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(196, 167, 119, 0.2); }
+        .acciones-popup button { flex: 1; margin: 0; padding: 8px 6px; font-family: 'Inter', sans-serif; font-size: 0.8rem; letter-spacing: 0.3px; font-weight: 500; border-radius: 6px; }
+        .acciones-popup .btn-borrar-spot { background-color: transparent; color: #c95c5c; border-color: rgba(201, 92, 92, 0.4); }
+        .acciones-popup .btn-borrar-spot:hover:not(:disabled) { background-color: rgba(201, 92, 92, 0.12); border-color: #c95c5c; box-shadow: none; }
+        #aviso-edicion { display: none; background: rgba(196, 167, 119, 0.1); border: 1px solid rgba(196, 167, 119, 0.4); color: #c4a777; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 20px; }
+        #aviso-edicion.activo { display: block; }
+        #btn-cancelar-edicion { display: none; margin-top: 0; }
+        #btn-cancelar-edicion.activo { display: block; }
+        #fotos-existentes { display: flex; flex-wrap: wrap; gap: 8px; }
+        .foto-existente { position: relative; width: 70px; height: 70px; }
+        .foto-existente img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 1px solid rgba(196, 167, 119, 0.3); }
+        .foto-existente button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0; margin: 0; border-radius: 50%; font-size: 0.7rem; line-height: 1; background: #5a1f1f; color: #fff; border-color: #c95c5c; font-family: 'Inter', sans-serif; }
+
         @media (max-width: 768px) { .contenedor { flex-direction: column; } #mapa { flex: 1; min-height: 50vh; } .panel { flex: 1; border-left: none; border-top: 1px solid rgba(196, 167, 119, 0.3); } #buscador-mapa { left: 15px; max-width: none; } }
     </style>
 </head>
@@ -125,6 +139,8 @@
         <div class="panel">
             <h1>Bitácora</h1>
             <p>Selecciona un punto en el mapa para registrar una memoria.</p>
+
+            <div id="aviso-edicion"></div>
 
             <form id="formulario-spot">
                 <div class="grupo-input">
@@ -152,12 +168,17 @@
                     <label for="descripcion">Memoria</label>
                     <textarea id="descripcion" rows="3" placeholder="¿Qué hace especial este lugar?" required></textarea>
                 </div>
+                <div class="grupo-input" id="grupo-fotos-existentes" style="display:none;">
+                    <label>Fotos actuales (toca ✕ para quitar)</label>
+                    <div id="fotos-existentes"></div>
+                </div>
                 <div class="grupo-input">
-                    <label for="foto">Sube tus fotos</label>
+                    <label for="foto" id="label-foto">Sube tus fotos</label>
                     <input type="file" id="foto" accept="image/*" multiple>
                 </div>
 
                 <button type="submit" id="btn-guardar">Guardar Memoria</button>
+                <button type="button" id="btn-cancelar-edicion" class="btn-secundario">Cancelar edición</button>
             </form>
         </div>
     </div>
@@ -270,7 +291,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyB8qp3r5DX9oVaOjYgdIx0UL8TXGt7CJGs",
@@ -288,6 +309,8 @@
         let latSeleccionada = null;
         let lngSeleccionada = null;
         let marcadorTemporal = null;
+        let editandoId = null;      // id del documento que se está editando (null = modo crear)
+        let editandoFotos = [];     // fotos que ya tenía el marcador y se conservan
 
         const miMapa = L.map('mapa').setView([4.58, -74.16], 12); 
 
@@ -420,6 +443,94 @@
             });
         };
 
+        // ---------- EDITAR / BORRAR ----------
+        const urlFotoSegura = (url) => {
+            if (url.includes("uc?export=view&id=")) {
+                return url.replace("uc?export=view&id=", "thumbnail?id=") + "&sz=w1000";
+            }
+            return url;
+        };
+
+        const renderFotosExistentes = () => {
+            const grupo = document.getElementById('grupo-fotos-existentes');
+            const cont = document.getElementById('fotos-existentes');
+            cont.innerHTML = '';
+            grupo.style.display = editandoFotos.length ? 'flex' : 'none';
+            editandoFotos.forEach((url, i) => {
+                const caja = document.createElement('div');
+                caja.className = 'foto-existente';
+                const img = document.createElement('img');
+                img.src = urlFotoSegura(url);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = '✕';
+                btn.title = 'Quitar foto';
+                btn.addEventListener('click', () => {
+                    editandoFotos.splice(i, 1);
+                    renderFotosExistentes();
+                });
+                caja.appendChild(img);
+                caja.appendChild(btn);
+                cont.appendChild(caja);
+            });
+        };
+
+        const salirModoEdicion = () => {
+            editandoId = null;
+            editandoFotos = [];
+            document.getElementById('formulario-spot').reset();
+            document.getElementById('aviso-edicion').classList.remove('activo');
+            document.getElementById('btn-cancelar-edicion').classList.remove('activo');
+            document.getElementById('btn-guardar').textContent = 'Guardar Memoria';
+            document.getElementById('label-foto').textContent = 'Sube tus fotos';
+            renderFotosExistentes();
+            if (marcadorTemporal) { miMapa.removeLayer(marcadorTemporal); marcadorTemporal = null; }
+            latSeleccionada = null;
+            lngSeleccionada = null;
+        };
+
+        const iniciarEdicion = (id, datos) => {
+            editandoId = id;
+            editandoFotos = Array.isArray(datos.fotosUrls) ? [...datos.fotosUrls] : (datos.fotoUrl ? [datos.fotoUrl] : []);
+
+            document.getElementById('titulo').value = datos.titulo || '';
+            document.getElementById('fechaVisita').value = datos.fechaVisita || '';
+            document.getElementById('elemento').value = datos.elemento || 'fuego';
+            document.getElementById('descripcion').value = datos.descripcion || '';
+            document.getElementById('foto').value = '';
+
+            latSeleccionada = datos.lat;
+            lngSeleccionada = datos.lng;
+            document.getElementById('coordenadas').value = `${datos.lat.toFixed(5)}, ${datos.lng.toFixed(5)}`;
+
+            if (marcadorTemporal) miMapa.removeLayer(marcadorTemporal);
+            const iconoTemp = L.divIcon({ html: `<div style="font-size: 24px; text-shadow: 0 0 10px #c4a777;">✨</div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
+            marcadorTemporal = L.marker([datos.lat, datos.lng], { icon: iconoTemp }).addTo(miMapa);
+
+            const aviso = document.getElementById('aviso-edicion');
+            aviso.textContent = `✏️ Editando: ${datos.titulo}. Haz clic en el mapa si quieres mover el marcador.`;
+            aviso.classList.add('activo');
+            document.getElementById('btn-cancelar-edicion').classList.add('activo');
+            document.getElementById('btn-guardar').textContent = 'Actualizar Memoria';
+            document.getElementById('label-foto').textContent = 'Agregar más fotos';
+            renderFotosExistentes();
+
+            document.querySelector('.panel').scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        const borrarSpot = async (id, titulo) => {
+            if (!confirm(`¿Seguro que quieres borrar "${titulo}"? Esta acción no se puede deshacer.`)) return;
+            try {
+                await deleteDoc(doc(db, "spots", id));
+                if (editandoId === id) salirModoEdicion();
+            } catch (error) {
+                console.error("Error al borrar: ", error);
+                alert("No se pudo borrar el marcador.");
+            }
+        };
+
+        document.getElementById('btn-cancelar-edicion').addEventListener('click', salirModoEdicion);
+
         document.getElementById('formulario-spot').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -465,36 +576,48 @@
 
                 btnGuardar.textContent = "Guardando en la bitácora... ✨";
 
-                await addDoc(collection(db, "spots"), {
+                const campos = {
                     titulo: document.getElementById('titulo').value,
                     fechaVisita: document.getElementById('fechaVisita').value,
                     elemento: document.getElementById('elemento').value,
                     descripcion: document.getElementById('descripcion').value,
-                    fotosUrls: fotosUrls, 
                     lat: latSeleccionada,
-                    lng: lngSeleccionada,
-                    fechaRegistro: new Date().toISOString()
-                });
+                    lng: lngSeleccionada
+                };
 
-                document.getElementById('formulario-spot').reset();
-                if (marcadorTemporal) miMapa.removeLayer(marcadorTemporal);
-                latSeleccionada = null;
-                lngSeleccionada = null;
-                alert("¡Recuerdo guardado con éxito!");
+                if (editandoId) {
+                    await updateDoc(doc(db, "spots", editandoId), {
+                        ...campos,
+                        fotosUrls: [...editandoFotos, ...fotosUrls],
+                        fotoUrl: deleteField(), // limpia el campo antiguo de una sola foto, si existía
+                        fechaEdicion: new Date().toISOString()
+                    });
+                    salirModoEdicion();
+                    alert("¡Recuerdo actualizado con éxito!");
+                } else {
+                    await addDoc(collection(db, "spots"), {
+                        ...campos,
+                        fotosUrls: fotosUrls,
+                        fechaRegistro: new Date().toISOString()
+                    });
+                    salirModoEdicion();
+                    alert("¡Recuerdo guardado con éxito!");
+                }
 
             } catch (error) {
                 console.error("Error al guardar: ", error);
-                alert("Hubo un error subiendo tus fotos a Drive.");
+                alert("Hubo un error al guardar. Revisa la consola para más detalles.");
             } finally {
-                btnGuardar.textContent = "Guardar Memoria";
+                btnGuardar.textContent = editandoId ? "Actualizar Memoria" : "Guardar Memoria";
                 btnGuardar.disabled = false;
             }
         });
 
         onSnapshot(collection(db, "spots"), (snapshot) => {
             grupoMarcadores.clearLayers();
-            snapshot.forEach((doc) => {
-                const datos = doc.data();
+            snapshot.forEach((docSnap) => {
+                const datos = docSnap.data();
+                const idSpot = docSnap.id;
                 const iconoPersonalizado = L.divIcon({
                     html: `<div>${obtenerEmoji(datos.elemento)}</div>`,
                     className: 'marcador-elemental', iconSize: [36, 36], iconAnchor: [18, 18]
@@ -530,11 +653,27 @@
                     ${fechaFormateada}
                     <p class="desc">${datos.descripcion}</p>
                     ${htmlFotos}
+                    <div class="acciones-popup">
+                        <button type="button" class="btn-editar-spot">✏️ Editar</button>
+                        <button type="button" class="btn-borrar-spot">🗑️ Borrar</button>
+                    </div>
                 `;
 
-                L.marker([datos.lat, datos.lng], { icon: iconoPersonalizado })
+                const marcador = L.marker([datos.lat, datos.lng], { icon: iconoPersonalizado })
                     .bindPopup(contenidoPopup)
                     .addTo(grupoMarcadores);
+
+                marcador.on('popupopen', (ev) => {
+                    const el = ev.popup.getElement();
+                    el.querySelector('.btn-editar-spot').addEventListener('click', () => {
+                        marcador.closePopup();
+                        iniciarEdicion(idSpot, datos);
+                    });
+                    el.querySelector('.btn-borrar-spot').addEventListener('click', () => {
+                        marcador.closePopup();
+                        borrarSpot(idSpot, datos.titulo);
+                    });
+                });
             });
         });
     </script>
