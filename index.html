@@ -2,9 +2,20 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Desbloqueando mapa. 🗣️</title>
-    
+
+    <!-- App instalable (PWA) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#0d110f">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bitácora">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
@@ -122,7 +133,66 @@
         .foto-existente img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 1px solid rgba(196, 167, 119, 0.3); }
         .foto-existente button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0; margin: 0; border-radius: 50%; font-size: 0.7rem; line-height: 1; background: #5a1f1f; color: #fff; border-color: #c95c5c; font-family: 'Inter', sans-serif; }
 
-        @media (max-width: 768px) { .contenedor { flex-direction: column; } #mapa { flex: 1; min-height: 50vh; } .panel { flex: 1; border-left: none; border-top: 1px solid rgba(196, 167, 119, 0.3); } #buscador-mapa { left: 15px; max-width: none; } }
+        /* BOTÓN "MI UBICACIÓN" */
+        #btn-ubicacion { position: absolute; right: 15px; bottom: 30px; z-index: 1000; width: 48px; height: 48px; margin: 0; padding: 0; border-radius: 50%; font-size: 1.3rem; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; background-color: rgba(22, 26, 21, 0.95); box-shadow: 0 6px 20px rgba(0,0,0,0.6); }
+        #btn-ubicacion.buscando { animation: pulso 1s ease-in-out infinite; }
+        @keyframes pulso { 50% { opacity: 0.5; } }
+        .punto-ubicacion { width: 18px; height: 18px; border-radius: 50%; background: #4fa3ff; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(79, 163, 255, 0.25); }
+
+        /* Cabecera del panel: en escritorio es solo el título; en móvil es el "tirador" de la hoja inferior */
+        .panel-cabecera { -webkit-tap-highlight-color: transparent; }
+        .tirador { display: none; }
+
+        /* ---------- VERSIÓN MÓVIL: mapa a pantalla completa + hoja deslizable ---------- */
+        @media (max-width: 768px) {
+            html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+            body { height: 100dvh; }
+            .contenedor { display: block; position: relative; }
+            #mapa { position: absolute; inset: 0; height: 100%; }
+
+            /* 16px evita que iOS haga zoom automático al tocar un campo */
+            input, textarea, select, #buscador-input { font-size: 16px; }
+
+            #buscador-mapa { top: calc(10px + env(safe-area-inset-top)); left: 12px; right: 12px; max-width: none; }
+            #buscador-input { padding: 14px 48px 14px 16px; }
+            #buscador-btn { padding: 10px; font-size: 1.1rem; }
+            .resultado-item { padding: 14px 16px; font-size: 0.95rem; }
+            #buscador-resultados { max-height: 45dvh; }
+
+            #btn-ubicacion { bottom: calc(var(--alto-cabecera) + 18px + env(safe-area-inset-bottom)); }
+            .leaflet-bottom.leaflet-right { bottom: calc(var(--alto-cabecera) + env(safe-area-inset-bottom)); }
+
+            :root { --alto-cabecera: 76px; }
+            .panel {
+                position: fixed; left: 0; right: 0; bottom: 0;
+                height: 88dvh; max-height: 88dvh;
+                padding: 0 20px calc(24px + env(safe-area-inset-bottom));
+                border-left: none; border-top: 1px solid rgba(196, 167, 119, 0.35);
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0 -10px 30px rgba(0,0,0,0.8);
+                transform: translateY(calc(100% - var(--alto-cabecera) - env(safe-area-inset-bottom)));
+                transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+                overflow: hidden; display: flex; flex-direction: column;
+                z-index: 1500;
+            }
+            .panel.abierto { transform: translateY(0); }
+            .panel-cabecera { flex-shrink: 0; height: var(--alto-cabecera); padding-top: 10px; cursor: pointer; touch-action: none; user-select: none; }
+            .tirador { display: block; width: 44px; height: 5px; border-radius: 3px; background: rgba(196, 167, 119, 0.45); margin: 0 auto 10px; }
+            .panel h1 { font-size: 1.3rem; margin: 0 0 2px; }
+            .panel-cabecera p { margin: 0 0 0 !important; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .panel-cuerpo { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-top: 14px; }
+            form { gap: 16px; }
+            button { padding: 16px; }
+
+            .leaflet-popup-content-wrapper { min-width: 0; max-height: 55dvh; }
+            .leaflet-popup-content { margin: 10px 12px; width: min(280px, calc(100vw - 90px)) !important; }
+            .acciones-popup button { padding: 12px 6px; font-size: 0.9rem; }
+
+            .modal-contenido { padding: 30px 18px calc(24px + env(safe-area-inset-bottom)); }
+            .btn-color { width: 44px; height: 44px; }
+            .foto-existente { width: 80px; height: 80px; }
+            .foto-existente button { width: 28px; height: 28px; top: -8px; right: -8px; }
+        }
     </style>
 </head>
 <body>
@@ -134,12 +204,17 @@
                 <button type="button" id="buscador-btn" aria-label="Buscar">🔍</button>
                 <div id="buscador-resultados"></div>
             </div>
+            <button type="button" id="btn-ubicacion" aria-label="Usar mi ubicación" title="Usar mi ubicación">🎯</button>
         </div>
 
-        <div class="panel">
-            <h1>Bitácora</h1>
-            <p>Selecciona un punto en el mapa para registrar una memoria.</p>
+        <div class="panel" id="panel">
+            <div class="panel-cabecera" id="panel-cabecera">
+                <div class="tirador"></div>
+                <h1>Bitácora</h1>
+                <p id="panel-subtitulo">Selecciona un punto en el mapa para registrar una memoria.</p>
+            </div>
 
+            <div class="panel-cuerpo">
             <div id="aviso-edicion"></div>
 
             <form id="formulario-spot">
@@ -180,6 +255,7 @@
                 <button type="submit" id="btn-guardar">Guardar Memoria</button>
                 <button type="button" id="btn-cancelar-edicion" class="btn-secundario">Cancelar edición</button>
             </form>
+            </div>
         </div>
     </div>
 
@@ -312,7 +388,38 @@
         let editandoId = null;      // id del documento que se está editando (null = modo crear)
         let editandoFotos = [];     // fotos que ya tenía el marcador y se conservan
 
-        const miMapa = L.map('mapa').setView([4.58, -74.16], 12); 
+        const esMovil = () => window.matchMedia('(max-width: 768px)').matches;
+
+        // En el celular se hace zoom con los dedos, así que quitamos los botones +/- para dejar sitio al buscador
+        const miMapa = L.map('mapa', { zoomControl: !esMovil(), tapTolerance: 20 }).setView([4.58, -74.16], 12);
+
+        // Evita que tocar el buscador o el botón de ubicación cuente como "tocar el mapa"
+        ['buscador-mapa', 'btn-ubicacion'].forEach(id => {
+            const el = document.getElementById(id);
+            L.DomEvent.disableClickPropagation(el);
+            L.DomEvent.disableScrollPropagation(el);
+        });
+
+        // ---------- HOJA INFERIOR (solo móvil) ----------
+        const panel = document.getElementById('panel');
+        const cabeceraPanel = document.getElementById('panel-cabecera');
+        const abrirPanel = () => { if (esMovil()) panel.classList.add('abierto'); };
+        const cerrarPanel = () => panel.classList.remove('abierto');
+
+        cabeceraPanel.addEventListener('click', () => { if (esMovil()) panel.classList.toggle('abierto'); });
+
+        let toqueInicioY = null;
+        cabeceraPanel.addEventListener('touchstart', (e) => { toqueInicioY = e.touches[0].clientY; }, { passive: true });
+        cabeceraPanel.addEventListener('touchend', (e) => {
+            if (toqueInicioY === null) return;
+            const delta = e.changedTouches[0].clientY - toqueInicioY;
+            toqueInicioY = null;
+            if (Math.abs(delta) < 30) return; // fue un toque, lo maneja el 'click'
+            e.preventDefault();
+            delta < 0 ? abrirPanel() : cerrarPanel();
+        });
+
+        window.addEventListener('resize', () => { if (!esMovil()) cerrarPanel(); miMapa.invalidateSize(); });
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_3r20_1_ea3679eeec1db6853c320142', {
             maxZoom: 19,
@@ -424,23 +531,75 @@
             }
         };
 
-        miMapa.on('click', function(e) {
-            latSeleccionada = e.latlng.lat;
-            lngSeleccionada = e.latlng.lng;
+        const seleccionarPunto = (lat, lng) => {
+            latSeleccionada = lat;
+            lngSeleccionada = lng;
             document.getElementById('coordenadas').value = `${latSeleccionada.toFixed(5)}, ${lngSeleccionada.toFixed(5)}`;
             if (marcadorTemporal) miMapa.removeLayer(marcadorTemporal);
-            
+
             const iconoTemp = L.divIcon({ html: `<div style="font-size: 24px; text-shadow: 0 0 10px #c4a777;">✨</div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
             marcadorTemporal = L.marker([latSeleccionada, lngSeleccionada], {icon: iconoTemp}).addTo(miMapa);
+
+            if (esMovil()) {
+                document.getElementById('panel-subtitulo').textContent = '✨ Punto elegido. Desliza hacia arriba para escribir la memoria.';
+                abrirPanel();
+            }
+        };
+
+        miMapa.on('click', (e) => seleccionarPunto(e.latlng.lat, e.latlng.lng));
+
+        // ---------- MI UBICACIÓN (GPS del celular) ----------
+        const btnUbicacion = document.getElementById('btn-ubicacion');
+        let marcadorUbicacion = null;
+        btnUbicacion.addEventListener('click', () => {
+            if (!navigator.geolocation) { alert('Tu dispositivo no permite obtener la ubicación.'); return; }
+            btnUbicacion.classList.add('buscando');
+            navigator.geolocation.getCurrentPosition((pos) => {
+                btnUbicacion.classList.remove('buscando');
+                const { latitude: lat, longitude: lng } = pos.coords;
+                miMapa.setView([lat, lng], 17);
+                if (marcadorUbicacion) miMapa.removeLayer(marcadorUbicacion);
+                marcadorUbicacion = L.marker([lat, lng], {
+                    icon: L.divIcon({ html: '<div class="punto-ubicacion"></div>', className: '', iconSize: [18, 18], iconAnchor: [9, 9] }),
+                    interactive: false
+                }).addTo(miMapa);
+                seleccionarPunto(lat, lng);
+            }, (err) => {
+                btnUbicacion.classList.remove('buscando');
+                alert(err.code === 1
+                    ? 'Necesito permiso de ubicación. Actívalo en los ajustes del navegador.'
+                    : 'No se pudo obtener tu ubicación. Intenta de nuevo.');
+            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
         });
 
-        const procesarImagen = (file) => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result.split(',')[1]); 
-                reader.onerror = error => reject(error);
-            });
+        const leerComoBase64 = (blob) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+        // Las fotos del celular pesan varios MB: las reducimos (máx. 1600px, JPEG) antes de subirlas a Drive.
+        // Si el navegador no puede leer el formato, se sube el archivo original.
+        const procesarImagen = async (file) => {
+            const original = { base64: await leerComoBase64(file), mimeType: file.type, fileName: file.name };
+            if (!file.type.startsWith('image/') || file.type === 'image/gif') return original;
+            try {
+                const url = URL.createObjectURL(file);
+                const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+                URL.revokeObjectURL(url);
+                const LADO_MAX = 1600;
+                const escala = Math.min(1, LADO_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.naturalWidth * escala);
+                canvas.height = Math.round(img.naturalHeight * escala);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
+                if (!blob || blob.size >= file.size) return original;
+                return { base64: await leerComoBase64(blob), mimeType: 'image/jpeg', fileName: file.name.replace(/\.[^.]+$/, '') + '.jpg' };
+            } catch {
+                return original;
+            }
         };
 
         // ---------- EDITAR / BORRAR ----------
@@ -487,6 +646,8 @@
             if (marcadorTemporal) { miMapa.removeLayer(marcadorTemporal); marcadorTemporal = null; }
             latSeleccionada = null;
             lngSeleccionada = null;
+            document.getElementById('panel-subtitulo').textContent = 'Selecciona un punto en el mapa para registrar una memoria.';
+            cerrarPanel();
         };
 
         const iniciarEdicion = (id, datos) => {
@@ -516,6 +677,9 @@
             renderFotosExistentes();
 
             document.querySelector('.panel').scrollTo({ top: 0, behavior: 'smooth' });
+            document.querySelector('.panel-cuerpo').scrollTo({ top: 0, behavior: 'smooth' });
+            document.getElementById('panel-subtitulo').textContent = `✏️ Editando: ${datos.titulo}`;
+            abrirPanel();
         };
 
         const borrarSpot = async (id, titulo) => {
@@ -552,12 +716,12 @@
                         const archivo = archivosFotos[i];
                         btnGuardar.textContent = `Subiendo foto ${i + 1} de ${archivosFotos.length}... ⏳`;
                         
-                        const base64Data = await procesarImagen(archivo);
-                        
+                        const imagen = await procesarImagen(archivo);
+
                         const formData = new URLSearchParams();
-                        formData.append('fileData', base64Data);
-                        formData.append('mimeType', archivo.type);
-                        formData.append('fileName', archivo.name);
+                        formData.append('fileData', imagen.base64);
+                        formData.append('mimeType', imagen.mimeType);
+                        formData.append('fileName', imagen.fileName);
 
                         const respuestaScript = await fetch(GOOGLE_SCRIPT_URL, {
                             method: 'POST',
@@ -660,7 +824,11 @@
                 `;
 
                 const marcador = L.marker([datos.lat, datos.lng], { icon: iconoPersonalizado })
-                    .bindPopup(contenidoPopup)
+                    .bindPopup(contenidoPopup, {
+                        maxWidth: Math.min(300, window.innerWidth - 60),
+                        autoPanPaddingTopLeft: L.point(10, esMovil() ? 80 : 10),
+                        autoPanPaddingBottomRight: L.point(10, esMovil() ? 100 : 10)
+                    })
                     .addTo(grupoMarcadores);
 
                 marcador.on('popupopen', (ev) => {
@@ -676,6 +844,15 @@
                 });
             });
         });
+    </script>
+
+    <script>
+        // Registra el service worker para que la app se pueda instalar en el celular y abra sin conexión
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service worker no registrado:', err));
+            });
+        }
     </script>
 </body>
 </html>
